@@ -1,0 +1,5 @@
+{
+  "name": "OpenLayers Map Explorer",
+  "description": "A clean, responsive map application built with OpenLayers and React.",
+  "requestFramePermissions": []
+}
