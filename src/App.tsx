@@ -53,6 +53,7 @@ export default function App() {
 
   // Search Results State
   const [results, setResults] = useState<any[]>([]);
+  const [resultsPerPage, setResultsPerPage] = useState(20);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showTable, setShowTable] = useState(false);
@@ -192,7 +193,7 @@ export default function App() {
       filter += ` and OData.CSC.Intersects(area=geography'SRID=4326;${wkt}')`;
 
       // Added $expand=Attributes to get cloud cover and other metadata
-      const url = `https://catalogue.dataspace.copernicus.eu/odata/v1/Products?$filter=${encodeURIComponent(filter)}&$expand=Attributes&$top=20&$orderby=ContentDate/Start desc`;
+      const url = `https://catalogue.dataspace.copernicus.eu/odata/v1/Products?$filter=${encodeURIComponent(filter)}&$expand=Attributes&$top=${resultsPerPage}&$orderby=ContentDate/Start desc`;
 
       const response = await fetch(url);
       if (!response.ok) {
@@ -319,6 +320,22 @@ export default function App() {
                   className="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-emerald-500 hover:accent-emerald-400 transition-all"
                 />
               </div>
+            </section>
+
+            {/* Results Per Page */}
+            <section className="space-y-3">
+              <label className="flex items-center gap-2 text-xs font-semibold text-zinc-400 uppercase tracking-wider">
+                <Layers className="w-3.5 h-3.5" />
+                Results Per Page
+              </label>
+              <input 
+                type="number" 
+                min="1" 
+                max="100"
+                value={resultsPerPage}
+                onChange={(e) => setResultsPerPage(parseInt(e.target.value) || 1)}
+                className="w-full bg-zinc-800 border border-white/10 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition-all"
+              />
             </section>
 
             {/* Search Button */}
