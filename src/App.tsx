@@ -69,21 +69,40 @@ export default function App() {
         }),
         new VectorLayer({
           source: footprintSource.current,
-          style: new Style({
-            stroke: new Stroke({
-              color: '#10b981',
-              width: 3,
-            }),
-            fill: new Fill({
-              color: 'rgba(16, 185, 129, 0.1)',
-            }),
-          }),
+          style: (feature) => {
+            const isSelected = feature.get('id') === selectedItemId;
+            return new Style({
+              stroke: new Stroke({
+                color: isSelected ? '#10b981' : 'rgba(16, 185, 129, 0.5)',
+                width: isSelected ? 3 : 1,
+              }),
+              fill: new Fill({
+                color: isSelected ? 'rgba(16, 185, 129, 0.2)' : 'rgba(16, 185, 129, 0.05)',
+              }),
+              zIndex: isSelected ? 10 : 1,
+            });
+          },
         }),
       ],
       view: new View({
         center: fromLonLat([0, 0]),
         zoom: 2,
       }),
+    });
+
+    initialMap.on('click', (evt) => {
+      const feature = initialMap.forEachFeatureAtPixel(evt.pixel, (f) => f);
+      if (feature) {
+        const id = feature.get('id');
+        if (id) {
+          setSelectedItemId(id);
+          // Scroll to the row in the table
+          const element = document.getElementById(`row-${id}`);
+          if (element) {
+            element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        }
+      }
     });
 
     mapRef.current = initialMap;
@@ -95,6 +114,45 @@ export default function App() {
       }
     };
   }, []);
+
+  // Update footprints when results change
+  useEffect(() => {
+    if (!results.length) {
+      footprintSource.current.clear();
+      return;
+    }
+
+    footprintSource.current.clear();
+    const format = new WKT();
+
+    results.forEach((item) => {
+      if (!item.Footprint) return;
+      try {
+        const wktMatch = item.Footprint.match(/POLYGON\s*\(.*\)/i) || item.Footprint.match(/MULTIPOLYGON\s*\(.*\)/i);
+        const wkt = wktMatch ? wktMatch[0] : item.Footprint;
+
+        const feature = format.readFeature(wkt, {
+          dataProjection: 'EPSG:4326',
+          featureProjection: 'EPSG:3857',
+        });
+        feature.set('id', item.Id);
+        footprintSource.current.addFeature(feature);
+      } catch (err) {
+        console.error('Error parsing footprint for item:', item.Id, err);
+      }
+    });
+  }, [results]);
+
+  // Refresh map style when selection changes
+  useEffect(() => {
+    if (mapRef.current) {
+      mapRef.current.getLayers().forEach((layer) => {
+        if (layer instanceof VectorLayer) {
+          layer.changed();
+        }
+      });
+    }
+  }, [selectedItemId]);
 
   const handleSearch = async () => {
     if (!mapRef.current) return;
@@ -162,22 +220,9 @@ export default function App() {
     if (!mapRef.current || !item.Footprint) return;
 
     setSelectedItemId(item.Id);
-    footprintSource.current.clear();
 
-    try {
-      const format = new WKT();
-      // The API returns footprint as 'geography'SRID=4326;POLYGON(...)'
-      // We need to extract the WKT part
-      const wktMatch = item.Footprint.match(/POLYGON\s*\(.*\)/i) || item.Footprint.match(/MULTIPOLYGON\s*\(.*\)/i);
-      const wkt = wktMatch ? wktMatch[0] : item.Footprint;
-
-      const feature = format.readFeature(wkt, {
-        dataProjection: 'EPSG:4326',
-        featureProjection: 'EPSG:3857',
-      });
-
-      footprintSource.current.addFeature(feature);
-      
+    const feature = footprintSource.current.getFeatures().find(f => f.get('id') === item.Id);
+    if (feature) {
       const extent = feature.getGeometry()?.getExtent();
       if (extent) {
         mapRef.current.getView().fit(extent, {
@@ -185,8 +230,6 @@ export default function App() {
           duration: 1000,
         });
       }
-    } catch (err) {
-      console.error('Error parsing footprint:', err);
     }
   };
 
@@ -396,6 +439,7 @@ export default function App() {
                       return (
                         <tr 
                           key={item.Id} 
+                          id={`row-${item.Id}`}
                           onClick={() => handleRowClick(item)}
                           className={`hover:bg-white/[0.02] transition-colors group cursor-pointer ${
                             selectedItemId === item.Id ? 'bg-emerald-500/10 border-l-2 border-l-emerald-500' : ''
